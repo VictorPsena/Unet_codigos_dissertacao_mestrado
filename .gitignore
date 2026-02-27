@@ -1,0 +1,5 @@
+banco2/
+.venv/
+redes/__pycache__/
+__pycache__/
+modelos/
