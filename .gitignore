@@ -1,5 +1,6 @@
 banco2/
 .venv/
-redes/__pycache__/
+redes/
+Validacao/
 __pycache__/
 modelos/
