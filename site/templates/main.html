@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AoGl</title>
+</head>
+<body>
+    <h1>Bem-vindo ao AoGl{% if name %} {{ name }}{% endif %}!</h1>
+    <form method="POST" enctype="multipart/form-data">
+        <div>
+            <label for="modelo">Modelo (.keras):</label>
+            <select id="modelo" name="modelo" required>
+                <option value="">Selecione</option>
+                {% for modelo in modelos %}
+                <option value="{{ modelo }}" {% if modelo == modelo_selecionado %}selected{% endif %}>{{ modelo }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label for="imagens">Escolha uma ou várias imagens:</label>
+            <input type="file" id="imagens" name="imagens" accept="image/*" multiple required>
+        </div>
+
+        <button type="submit">Processar e predizer</button>
+    </form>
+
+    {% if mensagem %}
+    <p>{{ mensagem }}</p>
+    {% endif %}
+
+    {% if resultados %}
+    <h2>Resultados</h2>
+    <ul>
+        {% for item in resultados %}
+        <li>
+            <strong>{{ item.arquivo }}</strong><br>
+            <img src="{{ item.imagem_predicao }}" alt="Predição {{ item.arquivo }}" width="256" height="256">
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</body>
+</html>

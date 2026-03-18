@@ -272,3 +272,134 @@ def tvt(x, y, shuffle=True, partition=0.8, nomes=None):
     else:
         return x_arr[idx_train], y_arr[idx_train], x_arr[idx_test], y_arr[idx_test]
 ##################################################################################################################
+def modificacoes1(
+    entrada,
+    nomes,
+    original=True,
+    brilho=None,
+    escura=None,
+    rotacao=None,
+):
+    dict_img_arr = {}
+    for i, img in enumerate(entrada):
+        nome, ext = os.path.splitext(nomes[i])
+        # original
+        if original:
+            nome_origi = f'{nome}_origi_{i}{ext}'
+            dict_img_arr[nome_origi] = img
+
+        
+
+        # brilho
+        if brilho is not None:
+            if img.ndim == 3 and img.shape[-1] == 1:
+                img = img.squeeze(-1)
+            if img.dtype != np.uint8:
+                if img.max() <= 1.0:
+                    img = (img * 255)
+                img = np.clip(img, 0, 255).astype(np.uint8)
+            img_luz = Image.fromarray(img, mode = 'L')
+            luz = ImageEnhance.Brightness(img_luz)
+            img_luz = luz.enhance(brilho)
+            img_luz = np.array(img_luz, dtype=np.float32) / 255.0
+            new_nome = f'{nome}_luz_{i}{ext}'
+            dict_img_arr[new_nome] = img_luz    
+            
+
+
+        # Redução de brilho
+        if escura is not None:
+            if img.ndim == 3 and img.shape[-1] == 1:
+                img = img.squeeze(-1)
+            if img.dtype != np.uint8:
+                if img.max() <= 1.0:
+                    img = (img * 255)
+                img = np.clip(img, 0, 255).astype(np.uint8)
+            img_escura = Image.fromarray(img, mode = 'L')
+            luz = ImageEnhance.Brightness(img_escura).enhance(escura)
+            img_escura = np.array(luz, dtype=np.float32) / 255.0
+            new_nome = f'{nome}_dark_{i}{ext}'
+            dict_img_arr[new_nome] = img_escura
+
+        if rotacao is not None:
+            if img.ndim == 3 and img.shape[-1] == 1:
+                img = img.squeeze(-1)
+            if img.dtype != np.uint8:
+                if img.max() <= 1.0:
+                    img = (img * 255)
+                img = np.clip(img, 0, 255).astype(np.uint8)
+            img_rot = Image.fromarray(img, mode='L')
+            
+            if isinstance(rotacao, (tuple, list)) and len(rotacao) == 2:
+                angulo = int(np.random.uniform(rotacao[0], rotacao[1]))
+            else:
+                angulo = int(rotacao)
+
+            # Deixa o nome de arquivo "seguro" (sem ponto/menos)
+            ang_str = f"{angulo}".replace("-", "m").replace(".", "p")
+
+            try:
+                img_rot = img_rot.rotate(
+                    angulo,
+                    resample=Image.BICUBIC,
+                    expand=False,
+                    fillcolor=0,
+                )
+                img_rot = np.array(img_rot, dtype=np.float32) / 255.0
+
+            except TypeError:
+                # Pillow antigo pode não suportar fillcolor
+                img_rot = img_rot.rotate(
+                    angulo,
+                    resample=Image.BICUBIC,
+                    expand=False,
+                )
+                img_rot = np.array(img_rot, dtype=np.float32) / 255.0
+
+            new_nome = f'{nome}_rot_{ang_str}_{i}{ext}'
+            dict_img_arr[new_nome] = img_rot
+            
+    
+    x_train = list(dict_img_arr.values())
+    x_train = [
+        img[..., np.newaxis] if img.ndim == 2 else img for img in x_train
+    ]   
+
+    return dict_img_arr, x_train
+##################################################################################################################
+def modificacoes2(dict_dados, nomes_train):
+    label = []
+    nome = []
+    for i in dict_dados.keys():
+        for j in nomes_train:
+            if j[:6] == i[:6]:
+                if 'rot' in j:
+                    if 'm' in j[-9:-6]:
+                        rotacao = -int(j[-9:-6].replace("_", "").replace("m", "").replace("p", "").replace("t", ""))
+                    else:
+                        rotacao = int(j[-9:-6].replace("_", "").replace("p", "").replace("t", ""))
+                    img = dict_dados[i]
+                    if img.ndim == 3 and img.shape[-1] == 1:
+                        img = img.squeeze(-1)
+                    if img.dtype != np.uint8:
+                        if img.max() <= 1.0:
+                            img = (img * 255)
+                        img = np.clip(img, 0, 255).astype(np.uint8)
+                    img_rot = Image.fromarray(img, mode='L')
+                    img_rot = img_rot.rotate(
+                        rotacao,
+                        resample=Image.BICUBIC,
+                        expand=False,
+                        fillcolor=0,
+                    )
+                    img_rot = np.array(img_rot, dtype=np.float32) / 255.0
+                    label.append(img_rot[..., np.newaxis] if img_rot.ndim == 2 else img_rot)
+                else:
+                    label.append(dict_dados[i])
+                    nome.append(i)
+
+                
+                
+
+            
+    return label, nome
