@@ -1,5 +1,5 @@
 # Bibliotecas
-from keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate
+from keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate, Dense, Reshape, Multiply
 from keras.models import Model
 
 
@@ -26,12 +26,12 @@ def decoder_block(filters, connections, inputs):
 
 
 # U-Net Model
-def unet(input_shape=(256, 256, 1), base_filters=64, max_filters=512):
+def unet(input_shape=(256, 256, 1), base_filters=64, max_filters=512, use_class_input=False):
     """U-Net configurável.
 
     Parâmetros
     - input_shape: tupla (H, W, C)
-    - base_filters: nº de filtros do 1º bloco (reduza para 32/16 para caber na GPU)
+    - base_filters: nº de filtros do 1º bloco 
     - max_filters: teto de filtros ao dobrar em profundidade
     """
 
@@ -53,7 +53,14 @@ def unet(input_shape=(256, 256, 1), base_filters=64, max_filters=512):
 
     # Baseline (bottleneck)
     baseline = baseline_layer(bottleneck_filters, p4) # 16x16x1024
-
+    if use_class_input:
+        class_input = Input(shape=(1,), name = 'animal_class')
+        # Projeta o escalar para um vetor do damanho dos filtros do bottleneck
+        class_embedding = Dense(bottleneck_filters, activation='relu')(class_input)
+        # Reshape para multiplicação elemento a elemento
+        class_embedding = Reshape((1, 1, bottleneck_filters))(class_embedding)
+        # Modula os features do bottleneck com a informação da classe
+        baseline = Multiply()([baseline, class_embedding])
     # Defining the decoder
     d1 = decoder_block(f4, connections=s4, inputs=baseline) # 32x32x512
     d2 = decoder_block(f3, connections=s3, inputs=d1) # 64x64x256
@@ -61,10 +68,13 @@ def unet(input_shape=(256, 256, 1), base_filters=64, max_filters=512):
     d4 = decoder_block(f1, connections=s1, inputs=d3) # 256x256x64
 
     # Output layer
-    # Mantém saída em float32 (melhor estabilidade numérica com mixed precision)
+    # Mantém saída em float32 
     outputs = Conv2D(1, kernel_size=1, padding='same', activation='sigmoid', dtype='float32')(d4) # 256x256x1
 
     # Finalizing the model
-    model = Model(inputs=inputs, outputs=outputs, name='U-Net')
+    if use_class_input:
+        model = Model(inputs=[inputs, class_input], outputs=outputs, name='U-Net-Conditioned')
+    else:
+        model = Model(inputs=inputs, outputs=outputs, name='U-Net')
 
     return model

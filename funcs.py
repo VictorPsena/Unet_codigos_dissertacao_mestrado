@@ -393,7 +393,9 @@ def modificacoes2(dict_dados, nomes_train):
                         fillcolor=0,
                     )
                     img_rot = np.array(img_rot, dtype=np.float32) / 255.0
-                    label.append(img_rot[..., np.newaxis] if img_rot.ndim == 2 else img_rot)
+                    label.append(img_rot[..., np.newaxis]
+                     if img_rot.ndim == 2 else img_rot)
+                    nome.append(i)
                 else:
                     label.append(dict_dados[i])
                     nome.append(i)
