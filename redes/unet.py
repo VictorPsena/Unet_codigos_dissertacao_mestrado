@@ -26,7 +26,7 @@ def decoder_block(filters, connections, inputs):
 
 
 # U-Net Model
-def unet(input_shape=(256, 256, 1), base_filters=64, max_filters=512, use_class_input=False):
+def unet(input_shape=(256, 256, 1), base_filters=64, max_filters=512, use_class_input=None):
     """U-Net configurável.
 
     Parâmetros
@@ -54,7 +54,7 @@ def unet(input_shape=(256, 256, 1), base_filters=64, max_filters=512, use_class_
     # Baseline (bottleneck)
     baseline = baseline_layer(bottleneck_filters, p4) # 16x16x1024
     if use_class_input:
-        class_input = Input(shape=(1,), name = 'animal_class')
+        class_input = Input(shape=(use_class_input,), name = 'animal_class')
         # Projeta o escalar para um vetor do damanho dos filtros do bottleneck
         class_embedding = Dense(bottleneck_filters, activation='relu')(class_input)
         # Reshape para multiplicação elemento a elemento
