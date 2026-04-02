@@ -370,7 +370,9 @@ def modificacoes1(
 def modificacoes2(dict_dados, nomes_train):
     label = []
     nome = []
+    lista_nomes_repetidos = []
     for i in dict_dados.keys():
+        cont = 0
         for j in nomes_train:
             if j[:6] == i[:6]:
                 if 'rot' in j:
@@ -399,6 +401,7 @@ def modificacoes2(dict_dados, nomes_train):
                 else:
                     label.append(dict_dados[i])
                     nome.append(i)
+
 
                 
                 
