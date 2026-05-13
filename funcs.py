@@ -3,11 +3,78 @@ import os
 import numpy as np
 import cv2
 import pytesseract
+import matplotlib.pyplot as plt
+import tensorflow as tf
+import pandas as pd
+
 from PIL import Image, ImageEnhance, ImageOps
 
 
-pytesseract.pytesseract.tesseract_cmd = r"C:/Program Files/Tesseract-OCR/tesseract.exe"
 
+pytesseract.pytesseract.tesseract_cmd = r"C:/Program Files/Tesseract-OCR/tesseract.exe"
+##################################################################################################################
+def _adicionar_manchas_pretas(
+    img_u8,
+    qtd=(1, 4),
+    raio_rel=(0.03, 0.10),
+    intensidade=(0.45, 0.95),
+    blur_ksize=11,
+    y_range=None,
+    x_range=None,
+    manter_dentro=True,
+):
+    h, w = img_u8.shape[:2]
+    menor = min(h, w)
+
+    y0, y1 = (0, h - 1) if y_range is None else (
+        max(0, int(y_range[0])),
+        min(h - 1, int(y_range[1]))
+    )
+    x0, x1 = (0, w - 1) if x_range is None else (
+        max(0, int(x_range[0])),
+        min(w - 1, int(x_range[1]))
+    )
+
+    if y0 > y1 or x0 > x1:
+        raise ValueError("Faixa x_range/y_range inválida")
+
+    mask = np.zeros((h, w), dtype=np.float32)
+    n = np.random.randint(qtd[0], qtd[1] + 1)
+
+    for _ in range(n):
+        r = int(np.random.uniform(raio_rel[0], raio_rel[1]) * menor)
+        r = max(2, r)
+
+        rx = max(2, int(r * np.random.uniform(0.7, 1.4)))
+        ry = max(2, int(r * np.random.uniform(0.7, 1.4)))
+        ang = float(np.random.uniform(0, 180))
+
+        if manter_dentro:
+            cx_min = max(x0 + rx, 0)
+            cx_max = min(x1 - rx, w - 1)
+            cy_min = max(y0 + ry, 0)
+            cy_max = min(y1 - ry, h - 1)
+        else:
+            cx_min, cx_max = x0, x1
+            cy_min, cy_max = y0, y1
+
+        if cx_min > cx_max or cy_min > cy_max:
+            continue
+
+        cx = np.random.randint(cx_min, cx_max + 1)
+        cy = np.random.randint(cy_min, cy_max + 1)
+
+        cv2.ellipse(mask, (cx, cy), (rx, ry), ang, 0, 360, 1.0, -1)
+
+    if blur_ksize is not None and blur_ksize > 1:
+        if blur_ksize % 2 == 0:
+            blur_ksize += 1
+        mask = cv2.GaussianBlur(mask, (blur_ksize, blur_ksize), 0)
+
+    alpha = float(np.random.uniform(intensidade[0], intensidade[1]))
+    out = img_u8.astype(np.float32) * (1.0 - alpha * np.clip(mask, 0.0, 1.0))
+    out = np.clip(out, 0, 255).astype(np.uint8)
+    return out
 ##################################################################################################################
 def banco(path, resolution=(200, 200), grayscale=False, keep_channel_dim=True, nomes=False, file_list=None):
     lista = []
@@ -279,6 +346,8 @@ def modificacoes1(
     brilho=None,
     escura=None,
     rotacao=None,
+    nitidez=None,
+    manchas_pretas=None,
 ):
     dict_img_arr = {}
     for i, img in enumerate(entrada):
@@ -358,7 +427,64 @@ def modificacoes1(
 
             new_nome = f'{nome}_rot_{ang_str}_{i}{ext}'
             dict_img_arr[new_nome] = img_rot
-            
+        
+        if nitidez is not None:
+            if img.ndim == 3 and img.shape[-1] == 1:
+                img = img.squeeze(-1)
+            if img.dtype != np.uint8:
+                if img.max() <= 1.0:
+                    img = (img * 255)
+                img = np.clip(img, 0, 255).astype(np.uint8)
+            img_nitida = Image.fromarray(img, mode='L')
+            if isinstance(nitidez, (tuple, list)) and len(nitidez) == 2:
+                nitidez_val = float(np.random.uniform(nitidez[0], nitidez[1]))
+            else:
+                nitidez_val = float(nitidez)
+            enhancer = ImageEnhance.Sharpness(img_nitida)
+            img_nitida = enhancer.enhance(nitidez_val) # 1.0 é original, <1.0 é mais borrada, >1.0 é mais nítida
+            img_nitida = np.array(img_nitida, dtype=np.float32) / 255.0
+            new_nome = f'{nome}_ndz_{i}{ext}'
+            dict_img_arr[new_nome] = img_nitida
+        
+        # Manchas pretas (artefato tipo sombra/dropout local)
+        if manchas_pretas is not None:
+            if img.ndim == 3 and img.shape[-1] == 1:
+                img_base = img.squeeze(-1)
+            else:
+                img_base = img.copy()
+
+            if img_base.dtype != np.uint8:
+                if img_base.max() <= 1.0:
+                    img_base = img_base * 255.0
+                img_base = np.clip(img_base, 0, 255).astype(np.uint8)
+
+            cfg = {
+                "qtd": (1, 4),
+                "raio_rel": (0.03, 0.10),
+                "intensidade": (0.45, 0.95),
+                "blur_ksize": 11,
+                "y_range": (0,150),
+                "x_range": (0,150),
+                "manter_dentro": True,
+            }
+            if isinstance(manchas_pretas, dict):
+                cfg.update(manchas_pretas)
+
+            img_mp = _adicionar_manchas_pretas(
+                img_base,
+                qtd=cfg["qtd"],
+                raio_rel=cfg["raio_rel"],
+                intensidade=cfg["intensidade"],
+                blur_ksize=cfg["blur_ksize"],
+                y_range=cfg["y_range"],
+                x_range=cfg["x_range"],
+                manter_dentro=cfg["manter_dentro"],
+            )
+
+            img_mp = img_mp.astype(np.float32) / 255.0
+            new_nome = f"{nome}_mp_{i}{ext}"
+            dict_img_arr[new_nome] = img_mp
+
     
     x_train = list(dict_img_arr.values())
     x_train = [
@@ -376,10 +502,13 @@ def modificacoes2(dict_dados, nomes_train):
         for j in nomes_train:
             if j[:6] == i[:6]:
                 if 'rot' in j:
-                    if 'm' in j[-9:-6]:
-                        rotacao = -int(j[-9:-6].replace("_", "").replace("m", "").replace("p", "").replace("t", ""))
-                    else:
-                        rotacao = int(j[-9:-6].replace("_", "").replace("p", "").replace("t", ""))
+                    parts = j.split('_rot_')
+                    if len(parts) > 1:
+                        ang_part = parts[1].rsplit('_', 1)[0]  # pega "m15" ou "15"
+                        if ang_part.startswith('m'):
+                            rotacao = -int(ang_part[1:].replace('p', '.'))
+                        else:
+                            rotacao = int(ang_part.replace('p', '.'))
                     img = dict_dados[i]
                     if img.ndim == 3 and img.shape[-1] == 1:
                         img = img.squeeze(-1)
@@ -408,3 +537,101 @@ def modificacoes2(dict_dados, nomes_train):
 
             
     return label, nome
+##################################################################################################################
+def AreaAOL(
+    predict,
+    orig_size=(403, 333), # dimensão original
+    threshold=0.5,
+    px_per_cm=24.05,
+    save_path='resultados_area_aol.xlsx',
+ ):
+    orig_h, orig_w = orig_size  # (H, W)
+    cm2_per_px2 = 1.0 / (px_per_cm ** 2)
+    # Predição (probabilidade)
+    y_pred = np.squeeze(predict)
+    # Binariza
+    y_pred_bin = (y_pred >= threshold).astype(np.uint8)
+    # Garante 2D
+    if y_pred_bin.ndim == 3:
+        y_pred_bin = np.squeeze(y_pred_bin)
+    # Resize para dimensão original (OpenCV usa (W,H))
+    pred_orig = cv2.resize(y_pred_bin, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST_EXACT)
+    # Áreas (px²) e (cm²)
+    area_pred_px = int(pred_orig.sum())
+    area_pred_cm2 = area_pred_px * cm2_per_px2
+
+    result = {
+        'orig_size': (orig_h, orig_w),
+        'threshold': float(threshold),
+        'px_per_cm': float(px_per_cm),
+        'area_pred_cm2': float(f"{area_pred_cm2:.2f}"),
+    }
+
+    df = pd.DataFrame([result])
+
+    if save_path:
+        return df.to_excel(save_path, index=False)
+
+    return df
+##################################################################################################################
+def MedidaEGL(
+    predict,
+    orig_size=(403, 333),
+    threshold=0.5,
+    px_per_cm=24.05,
+    save_path='resultados_medida_egl.xlsx',
+ ):
+    orig_h, orig_w = orig_size  # (H, W)
+    cm_per_px = 1.0 / px_per_cm 
+
+    y_pred = np.squeeze(predict)
+    # Binariza
+    y_pred_bin = (y_pred >= threshold).astype(np.uint8)
+    # Se a máscara veio como 0..255, normaliza implicitamente via threshold
+    # Garante 2D
+    if y_pred_bin.ndim == 3:
+        y_pred_bin = np.squeeze(y_pred_bin)
+    # Resize para dimensão original (OpenCV usa (W,H))
+    pred_orig = cv2.resize(y_pred_bin, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST_EXACT)
+    # Diametro vertical (de cima para baixo) na dimensão original
+
+    def _media_vertical(mask: np.ndarray) -> float:
+        lengths = []
+        rows, cols = mask.shape
+
+        for col in range(cols):
+            current_len = 0
+            for row in range(rows):
+                if mask[row, col] == 1:
+                    current_len += 1
+                else:
+                    if current_len > 0:
+                        lengths.append(current_len)
+                    current_len = 0
+            if current_len > 0:
+                lengths.append(current_len)
+
+        return np.mean(lengths) if lengths else 0.0
+  
+    diam_pred_px = _media_vertical(pred_orig)
+    diam_pred_cm = diam_pred_px * cm_per_px
+
+
+
+    
+
+    result = {
+        'orig_size': (orig_h, orig_w),
+        'threshold': float(threshold),
+        'px_per_cm': float(px_per_cm),
+        'diam_pred_cm': float(diam_pred_cm),
+    }
+    
+    df = pd.DataFrame([result])
+
+    if save_path:
+        return df.to_excel(save_path, index=False)
+
+    return df
+
+##################################################################################################################

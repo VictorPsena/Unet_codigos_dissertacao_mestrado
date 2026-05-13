@@ -6,3 +6,13 @@ __pycache__/
 modelos/
 site/__pycache__/
 medidas/
+features/
+IMGS/
+feature_maps_fuzzy_egl/
+feature_maps_unet_egl/
+feature_maps_unet_fuzzy_aol/
+feature_maps_unet_aol/
+modelos_finais/
+
+
+

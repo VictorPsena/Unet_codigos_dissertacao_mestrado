@@ -22,6 +22,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 from funcs import banco
+from redes.fuzzy_layer import get_fuzzy_custom_objects
 
 
 
@@ -29,6 +30,7 @@ App = Flask(__name__, template_folder='templates')
 
 imagens_em_memoria = []
 modelos_cache = {}
+FUZZY_CUSTOM_OBJECTS = get_fuzzy_custom_objects()
 
 """ setting DICE coefficient to evaluate the model """
 def dice_coefficient(y_true, y_pred, smooth=1.0):
@@ -55,7 +57,11 @@ def carregar_modelo(nome_modelo):
         return modelos_cache[nome_modelo]
 
     caminho_modelo = MODELS_DIR / nome_modelo
-    modelo = load_model(caminho_modelo, custom_objects={'dice_coefficient': dice_coefficient})
+    custom_objects = {
+        'dice_coefficient': dice_coefficient,
+        **FUZZY_CUSTOM_OBJECTS,
+    }
+    modelo = load_model(caminho_modelo, custom_objects=custom_objects)
     modelos_cache[nome_modelo] = modelo
     return modelo
 

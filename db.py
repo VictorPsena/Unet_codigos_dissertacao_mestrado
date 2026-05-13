@@ -21,8 +21,8 @@ pasta_alvo = 'banco1/imgAOL/24_11_21_NelorePGP-manha'
 # funcs.altera_nome(pasta_imagens, pasta_alvo, extensao=".BMP", encontrar='_')
 
 """Corte na imagem"""
-pasta_alvo ='banco2/Nelore2/EGG/imgs1'
-pasta_saida ='banco2/Nelore2/EGG/imgs'
+pasta_alvo ='banco2/CARACU_1/EGG/imgs1'
+pasta_saida ='banco2/CARACU_1/EGG/imgs'
 funcs.corte(pasta_alvo, pasta_saida, corte = [0.15, 0.06, 0.67, 0.90])
 
 """ Aplica transformações nas imagens """
